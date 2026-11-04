@@ -7,25 +7,30 @@ on:
         description: Image URL to fetch (Canva or other generated-image link)
         required: true
       name:
-        description: Unique request name, letters/digits/dashes
+        description: Unique request name, letters/digits/dashes only
         required: true
 permissions:
-  contents: read
+  contents: write
 jobs:
   fetch:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Download image
+      - name: Download image and hand it back on a temporary branch
         env:
           IMG_URL: ${{ inputs.url }}
+          NAME: ${{ inputs.name }}
+          TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
         run: |
-          mkdir out
-          curl -fsSL --retry 3 --max-time 120 "$IMG_URL" -o out/image
-          file out/image
-          test $(stat -c%s out/image) -gt 1000
-      - uses: actions/upload-artifact@v4
-        with:
-          name: ${{ inputs.name }}
-          path: out/image
-          retention-days: 1
+          set -e
+          case "$NAME" in *[!A-Za-z0-9-]*|"") echo "bad name"; exit 1;; esac
+          mkdir inbox && cd inbox
+          curl -fsSL --retry 3 --max-time 120 "$IMG_URL" -o image
+          test $(stat -c%s image) -gt 1000
+          file image
+          git init -q
+          git checkout -q --orphan "inbox/$NAME"
+          git add image
+          git -c user.name="bni-fetch" -c user.email="bni-fetch@users.noreply.github.com" commit -qm "temp image for $NAME"
+          git push -q "https://x-access-token:${TOKEN}@github.com/${REPO}.git" "HEAD:refs/heads/inbox/$NAME"
