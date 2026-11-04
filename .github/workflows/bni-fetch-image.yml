@@ -1,0 +1,31 @@
+name: BNI fetch image
+run-name: fetch ${{ inputs.name }}
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: Image URL to fetch (Canva or other generated-image link)
+        required: true
+      name:
+        description: Unique request name, letters/digits/dashes
+        required: true
+permissions:
+  contents: read
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Download image
+        env:
+          IMG_URL: ${{ inputs.url }}
+        run: |
+          mkdir out
+          curl -fsSL --retry 3 --max-time 120 "$IMG_URL" -o out/image
+          file out/image
+          test $(stat -c%s out/image) -gt 1000
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.name }}
+          path: out/image
+          retention-days: 1
