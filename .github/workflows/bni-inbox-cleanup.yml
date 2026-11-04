@@ -1,0 +1,24 @@
+name: BNI inbox cleanup
+on:
+  schedule:
+    - cron: "17 */3 * * *"
+  workflow_dispatch: {}
+permissions:
+  contents: write
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Delete temporary inbox branches older than 2 hours
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          now=$(date +%s)
+          gh api "repos/$REPO/git/matching-refs/heads/inbox/" --jq '.[].ref' | while read ref; do
+            sha=$(gh api "repos/$REPO/git/$ref" --jq .object.sha)
+            when=$(gh api "repos/$REPO/git/commits/$sha" --jq .committer.date)
+            age=$(( now - $(date -d "$when" +%s) ))
+            if [ "$age" -gt 7200 ]; then echo "deleting $ref"; gh api -X DELETE "repos/$REPO/git/$ref"; fi
+          done
